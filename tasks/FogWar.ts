@@ -1,122 +1,78 @@
 import { task } from "hardhat/config";
 import type { TaskArguments } from "hardhat/types";
 
-task("task:deployFogWar")
-  .setDescription("Deploy FogWar contract")
-  .setAction(async function (taskArguments: TaskArguments, { ethers, deployments }) {
-    const { deploy } = deployments;
-    const accounts = await ethers.getSigners();
-    const deployer = accounts[0];
-
-    console.log("Deploying FogWar contract...");
-    console.log("Deployer address:", deployer.address);
-
-    const deployment = await deploy("FogWar", {
-      from: deployer.address,
-      log: true,
-    });
-
-    console.log(`FogWar deployed at: ${deployment.address}`);
-    console.log(`Gas used: ${deployment.receipt?.gasUsed}`);
+task("fogwar:address", "Print FogWar address")
+  .addOptionalParam("address", "Optionally specify the FogWar contract address")
+  .setAction(async (args, hre) => {
+    if (args.address) {
+      console.log(`FogWar: ${args.address}`);
+      return;
+    }
+    const d = await hre.deployments.get("FogWar");
+    console.log(`FogWar: ${d.address}`);
   });
 
-task("task:createGame")
-  .setDescription("Create a new FogWar game")
-  .addOptionalParam("contract", "FogWar contract address")
-  .setAction(async function (taskArguments: TaskArguments, { ethers }) {
-    const accounts = await ethers.getSigners();
-    const deployer = accounts[0];
-
-    let contractAddress = taskArguments.contract;
-    if (!contractAddress) {
-      // Try to get from deployments
-      try {
-        const deployment = await ethers.deployments.get("FogWar");
-        contractAddress = deployment.address;
-      } catch (error) {
-        console.error("Contract address not provided and no deployment found");
-        return;
-      }
-    }
-
-    const FogWar = await ethers.getContractFactory("FogWar");
-    const fogWar = FogWar.attach(contractAddress);
-
-    console.log("Creating new game...");
-    const tx = await fogWar.createGame();
-    const receipt = await tx.wait();
-
-    // Get gameId from event
-    const event = receipt?.logs?.find((log: any) => {
-      try {
-        return fogWar.interface.parseLog(log)?.name === "GameCreated";
-      } catch {
-        return false;
-      }
-    });
-
-    if (event) {
-      const parsedEvent = fogWar.interface.parseLog(event);
-      console.log(`Game created with ID: ${parsedEvent?.args?.gameId}`);
-    } else {
-      console.log("Game created but ID not found in events");
-    }
+task("fogwar:create", "Create a new game")
+  .addFlag("defender", "Create as defender (default attacker if omitted)")
+  .addOptionalParam("address", "Optionally specify the FogWar contract address")
+  .setAction(async (args, hre) => {
+    const addr = args.address || (await hre.deployments.get("FogWar")).address;
+    const [signer] = await hre.ethers.getSigners();
+    const c = await hre.ethers.getContractAt("FogWar", addr);
+    const tx = await c.connect(signer).createGame(args.defender);
+    console.log(`createGame tx: ${tx.hash}`);
+    const rc = await tx.wait();
+    // Fetch nextGameId to infer id or parse event logs if needed; here we read state
+    const next = await c.nextGameId();
+    console.log(`created gameId: ${next.toString()}`);
   });
 
-task("task:joinGame")
-  .setDescription("Join an existing FogWar game")
-  .addParam("gameid", "Game ID to join")
-  .addOptionalParam("contract", "FogWar contract address")
-  .setAction(async function (taskArguments: TaskArguments, { ethers }) {
-    const accounts = await ethers.getSigners();
-    const player = accounts[1]; // Use second account as attacker
-
-    let contractAddress = taskArguments.contract;
-    if (!contractAddress) {
-      try {
-        const deployment = await ethers.deployments.get("FogWar");
-        contractAddress = deployment.address;
-      } catch (error) {
-        console.error("Contract address not provided and no deployment found");
-        return;
-      }
-    }
-
-    const FogWar = await ethers.getContractFactory("FogWar");
-    const fogWar = FogWar.attach(contractAddress).connect(player);
-
-    console.log(`Joining game ${taskArguments.gameid}...`);
-    const tx = await fogWar.joinGame(taskArguments.gameid);
+task("fogwar:join:defender", "Join as defender")
+  .addOptionalParam("address", "Optionally specify the FogWar contract address")
+  .addParam("gameid", "Game id")
+  .setAction(async (args, hre) => {
+    const addr = args.address || (await hre.deployments.get("FogWar")).address;
+    const [signer] = await hre.ethers.getSigners();
+    const c = await hre.ethers.getContractAt("FogWar", addr);
+    const tx = await c.connect(signer).joinAsDefender(Number(args.gameid));
+    console.log(`joinAsDefender tx: ${tx.hash}`);
     await tx.wait();
-
-    console.log("Successfully joined the game!");
   });
 
-task("task:getGame")
-  .setDescription("Get game information")
-  .addParam("gameid", "Game ID to query")
-  .addOptionalParam("contract", "FogWar contract address")
-  .setAction(async function (taskArguments: TaskArguments, { ethers }) {
-    let contractAddress = taskArguments.contract;
-    if (!contractAddress) {
-      try {
-        const deployment = await ethers.deployments.get("FogWar");
-        contractAddress = deployment.address;
-      } catch (error) {
-        console.error("Contract address not provided and no deployment found");
-        return;
-      }
-    }
+task("fogwar:join:attacker", "Join as attacker")
+  .addOptionalParam("address", "Optionally specify the FogWar contract address")
+  .addParam("gameid", "Game id")
+  .setAction(async (args, hre) => {
+    const addr = args.address || (await hre.deployments.get("FogWar")).address;
+    const [signer] = await hre.ethers.getSigners();
+    const c = await hre.ethers.getContractAt("FogWar", addr);
+    const tx = await c.connect(signer).joinAsAttacker(Number(args.gameid));
+    console.log(`joinAsAttacker tx: ${tx.hash}`);
+    await tx.wait();
+  });
 
-    const FogWar = await ethers.getContractFactory("FogWar");
-    const fogWar = FogWar.attach(contractAddress);
+task("fogwar:move", "Move a soldier")
+  .addParam("index", "Soldier index (0..2)")
+  .addParam("x", "New X (1..9)")
+  .addParam("y", "New Y (1..9)")
+  .addOptionalParam("address", "Optionally specify the FogWar contract address")
+  .addParam("gameid", "Game id")
+  .setAction(async (args: TaskArguments & { address?: string; gameid: string }, hre) => {
+    const addr = args.address || (await hre.deployments.get("FogWar")).address;
+    const [signer] = await hre.ethers.getSigners();
+    const c = await hre.ethers.getContractAt("FogWar", addr);
+    const tx = await c
+      .connect(signer)
+      .moveMySoldier(Number(args.gameid), Number(args.index), Number(args.x), Number(args.y));
+    console.log(`move tx: ${tx.hash}`);
+    await tx.wait();
+  });
 
-    const game = await fogWar.getGame(taskArguments.gameid);
-    
-    console.log("Game Information:");
-    console.log(`Game ID: ${game.gameId}`);
-    console.log(`Defender: ${game.defender}`);
-    console.log(`Attacker: ${game.attacker}`);
-    console.log(`Current Player: ${game.currentPlayer}`);
-    console.log(`State: ${game.state}`);
+task("fogwar:list", "List all gameIds")
+  .addOptionalParam("address", "Optionally specify the FogWar contract address")
+  .setAction(async (args, hre) => {
+    const addr = args.address || (await hre.deployments.get("FogWar")).address;
+    const c = await hre.ethers.getContractAt("FogWar", addr);
+    const ids: bigint[] = await c.listGames();
+    console.log(`gameIds: ${ids.map((x) => x.toString()).join(", ")}`);
   });
