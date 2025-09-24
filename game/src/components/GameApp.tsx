@@ -122,13 +122,22 @@ export function GameApp() {
     if (!zamaInstance || zamaLoading) return;
     if (!gameId) return;
 
+    // Always fetch latest on-chain ciphertext handles before decrypt
+    const [freshXs, freshYs] = await client.readContract({
+      address: CONTRACT_ADDRESS,
+      abi: CONTRACT_ABI,
+      functionName: role === 'defender' ? 'getDefenderPositions' : 'getAttackerPositions',
+      args: [gameId],
+    }) as [string[], string[]];
+
     // Only decrypt my soldiers, not opponent's
-    const mine = role === 'defender' ? defenders : attackers;
+    const mineXs = freshXs;
+    const mineYs = freshYs;
     const pairs = [] as { handle: string; contractAddress: string }[];
     const contractAddress = CONTRACT_ADDRESS;
     for (let i = 0; i < 3; i++) {
-      if (mine.xs[i]) pairs.push({ handle: mine.xs[i] as string, contractAddress });
-      if (mine.ys[i]) pairs.push({ handle: mine.ys[i] as string, contractAddress });
+      if (mineXs[i]) pairs.push({ handle: mineXs[i] as string, contractAddress });
+      if (mineYs[i]) pairs.push({ handle: mineYs[i] as string, contractAddress });
     }
 
     // Generate user keypair and EIP712 to request decryption
@@ -163,8 +172,8 @@ export function GameApp() {
     // Extract my positions
     const minePos: { x: number; y: number }[] = [];
     for (let i = 0; i < 3; i++) {
-      const hx = mine.xs[i] as string;
-      const hy = mine.ys[i] as string;
+      const hx = mineXs[i] as string;
+      const hy = mineYs[i] as string;
       const x = result[hx];
       const y = result[hy];
       if (typeof x === 'bigint' && typeof y === 'bigint') {
@@ -195,6 +204,11 @@ export function GameApp() {
             selectedIndex={moveIndex}
             onSelectIndex={(i) => setMoveIndex(i)}
           />
+          <section style={{ background: '#fff', border: '1px solid #ddd', borderRadius: 8, padding: 16, marginTop: 16 }}>
+            <p>You can not see your emermy's positon.</p>
+            <p>Decrypt your soldiers position.</p>
+            <button onClick={decryptAll} disabled={!address} style={{ padding: '6px 10px' }}>Decrypt</button>
+          </section>
         </div>
         <div style={{ flex: 1 }}>
           <section style={{ background: '#fff', border: '1px solid #ddd', borderRadius: 8, padding: 16, marginBottom: 16 }}>
@@ -227,6 +241,7 @@ export function GameApp() {
 
           <section style={{ background: '#fff', border: '1px solid #ddd', borderRadius: 8, padding: 16, marginBottom: 16 }}>
             <h3 style={{ marginTop: 0 }}>Move Soldier</h3>
+            <p>Decrypt and Click your soldier first</p>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               <label>Index (0-2): <input type="number" value={moveIndex} min={0} max={2} readOnly style={{ width: 60, background: '#f7f7f7' }} /></label>
               <label>Direction:
@@ -241,11 +256,7 @@ export function GameApp() {
             </div>
           </section>
 
-          <section style={{ background: '#fff', border: '1px solid #ddd', borderRadius: 8, padding: 16 }}>
-            <h3 style={{ marginTop: 0 }}>Decrypt</h3>
-            <p>Decrypt your soldiers via user-decrypt.</p>
-            <button onClick={decryptAll} disabled={!address} style={{ padding: '6px 10px' }}>Decrypt</button>
-          </section>
+          
         </div>
       </div>
     </div>
