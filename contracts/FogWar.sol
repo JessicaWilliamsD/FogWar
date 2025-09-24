@@ -155,4 +155,20 @@ contract FogWar is SepoliaConfig {
         bool isDef = (msg.sender == g.defender);
         for (uint8 i = 0; i < 3; i++) { xs[i] = isDef ? g.defenders[i].x : g.attackers[i].x; ys[i] = isDef ? g.defenders[i].y : g.attackers[i].y; }
     }
+
+    function getDefenderPublicity(uint256 gameId) external view returns (bool[3] memory xPublic, bool[3] memory yPublic) {
+        Game storage g = games[gameId];
+        for (uint8 i = 0; i < 3; i++) {
+            xPublic[i] = FHE.isPubliclyDecryptable(g.defenders[i].x);
+            yPublic[i] = FHE.isPubliclyDecryptable(g.defenders[i].y);
+        }
+    }
+
+    function getAttackerPublicity(uint256 gameId) external view returns (bool[3] memory xPublic, bool[3] memory yPublic) {
+        Game storage g = games[gameId];
+        for (uint8 i = 0; i < 3; i++) {
+            xPublic[i] = FHE.isPubliclyDecryptable(g.attackers[i].x);
+            yPublic[i] = FHE.isPubliclyDecryptable(g.attackers[i].y);
+        }
+    }
 }
