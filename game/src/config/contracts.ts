@@ -9,7 +9,7 @@
 import FogWarDeployment from './fogwar.deployment.json';
 
 export const CONTRACT_ADDRESS: `0x${string}` = FogWarDeployment.address as `0x${string}`;
-export const CONTRACT_ABI = FogWarDeployment.abi as const;
+export const CONTRACT_ABI = FogWarDeployment.abi as readonly unknown[];
 
 export type FogWarAbi = typeof CONTRACT_ABI;
 export type FogWarAddress = typeof CONTRACT_ADDRESS;

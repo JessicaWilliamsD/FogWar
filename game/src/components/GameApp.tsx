@@ -1,7 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount, useReadContract } from 'wagmi';
-import { formatAddress } from '../utils/format';
 import { Board } from './Board';
 import { CONTRACT_ABI, CONTRACT_ADDRESS } from '../config/contracts';
 import { useZamaInstance } from '../hooks/useZamaInstance';
@@ -11,32 +10,15 @@ import { ethers } from 'ethers';
 
 const client = createPublicClient({ chain: sepolia, transport: http() });
 
-type EHandle = `0x${string}`;
+// type EHandle = `0x${string}`;
 
-function useGamePositions(gameId?: bigint) {
-  const args = gameId ? [gameId] : undefined;
-  const { data: defenderData } = useReadContract({ address: CONTRACT_ADDRESS, abi: CONTRACT_ABI, functionName: 'getDefenderPositions', args });
-  const { data: attackerData } = useReadContract({ address: CONTRACT_ADDRESS, abi: CONTRACT_ABI, functionName: 'getAttackerPositions', args });
-  const defenders = useMemo(() => {
-    if (!defenderData) return { xs: [], ys: [] } as { xs: EHandle[]; ys: EHandle[] };
-    const [xs, ys] = defenderData as [EHandle[], EHandle[]];
-    return { xs, ys };
-  }, [defenderData]);
-  const attackers = useMemo(() => {
-    if (!attackerData) return { xs: [], ys: [] } as { xs: EHandle[]; ys: EHandle[] };
-    const [xs, ys] = attackerData as [EHandle[], EHandle[]];
-    return { xs, ys };
-  }, [attackerData]);
-  return { defenders, attackers };
-}
+// Removed live position reads; decrypt fetches latest handles on demand.
 
 export function GameApp() {
   const { address } = useAccount();
   const { instance: zamaInstance, isLoading: zamaLoading } = useZamaInstance();
   const [games, setGames] = useState<bigint[]>([]);
   const [gameId, setGameId] = useState<bigint | undefined>(undefined);
-
-  const { defenders, attackers } = useGamePositions(gameId);
 
   const { data: gameInfo } = useReadContract({
     address: CONTRACT_ADDRESS,
@@ -183,8 +165,8 @@ export function GameApp() {
     setMyPositions(minePos);
   }
 
-  const defenderSoldiers = role === 'defender' ? myPositions : visibleOpponent;
-  const attackerSoldiers = role === 'attacker' ? myPositions : visibleOpponent;
+  const defenderSoldiers = role === 'defender' ? myPositions : [];
+  const attackerSoldiers = role === 'attacker' ? myPositions : [];
 
   return (
     <div style={{ maxWidth: 960, margin: '0 auto', padding: '24px' }}>

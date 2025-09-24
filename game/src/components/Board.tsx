@@ -1,4 +1,4 @@
-import React from 'react';
+// React import not required with automatic JSX runtime
 
 type Cell = {
   x: number;
