@@ -190,6 +190,30 @@
           "type": "uint256"
         }
       ],
+      "name": "getAttackerPublicity",
+      "outputs": [
+        {
+          "internalType": "bool[3]",
+          "name": "xPublic",
+          "type": "bool[3]"
+        },
+        {
+          "internalType": "bool[3]",
+          "name": "yPublic",
+          "type": "bool[3]"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "gameId",
+          "type": "uint256"
+        }
+      ],
       "name": "getDefenderPositions",
       "outputs": [
         {
@@ -201,6 +225,30 @@
           "internalType": "euint8[3]",
           "name": "ys",
           "type": "bytes32[3]"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "gameId",
+          "type": "uint256"
+        }
+      ],
+      "name": "getDefenderPublicity",
+      "outputs": [
+        {
+          "internalType": "bool[3]",
+          "name": "xPublic",
+          "type": "bool[3]"
+        },
+        {
+          "internalType": "bool[3]",
+          "name": "yPublic",
+          "type": "bool[3]"
         }
       ],
       "stateMutability": "view",

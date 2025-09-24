@@ -4,7 +4,7 @@ import { useAccount, useReadContract } from 'wagmi';
 import { formatAddress } from '../utils/format';
 import { Board } from './Board';
 import { CONTRACT_ABI, CONTRACT_ADDRESS } from '../config/contracts';
-import { createInstance, SepoliaConfig } from '@zama-fhe/relayer-sdk/bundle';
+import { useZamaInstance } from '../hooks/useZamaInstance';
 import { createPublicClient, http } from 'viem';
 import { sepolia } from 'viem/chains';
 import { ethers } from 'ethers';
@@ -32,6 +32,7 @@ function useGamePositions(gameId?: bigint) {
 
 export function GameApp() {
   const { address } = useAccount();
+  const { instance: zamaInstance, isLoading: zamaLoading } = useZamaInstance();
   const [games, setGames] = useState<bigint[]>([]);
   const [gameId, setGameId] = useState<bigint | undefined>(undefined);
 
@@ -109,16 +110,30 @@ export function GameApp() {
 
   async function decryptAll() {
     if (!address) return;
-    const instance = await createInstance(SepoliaConfig);
+    if (!zamaInstance || zamaLoading) return;
+
+    // Fetch opponent publicity from contract before decrypting
+    if (!gameId) return;
+    const forDefender = role === 'attacker'; // if I'm attacker, opponent is defender
+    const [xPub, yPub] = await client.readContract({
+      address: CONTRACT_ADDRESS,
+      abi: CONTRACT_ABI,
+      functionName: forDefender ? 'getDefenderPublicity' : 'getAttackerPublicity',
+      args: [gameId],
+    }) as [boolean[], boolean[]];
 
     // opponent public decrypt
     const opp = role === 'defender' ? attackers : defenders; // opponent's handles
     const handles: string[] = [];
     for (let i = 0; i < 3; i++) {
-      if (opp.xs[i]) handles.push(opp.xs[i] as string);
-      if (opp.ys[i]) handles.push(opp.ys[i] as string);
+      // Only decrypt fully public soldiers (both x and y marked public)
+      const isPublic = xPub?.[i] && yPub?.[i];
+      if (isPublic) {
+        if (opp.xs[i]) handles.push(opp.xs[i] as string);
+        if (opp.ys[i]) handles.push(opp.ys[i] as string);
+      }
     }
-    const pub = await instance.publicDecrypt(handles);
+    const pub = await zamaInstance.publicDecrypt(handles);
     const oppPos: { x: number; y: number }[] = [];
     for (let i = 0; i < 3; i++) {
       const hx = opp.xs[i] as string;
@@ -139,7 +154,7 @@ export function GameApp() {
       if (mine.xs[i]) pairs.push({ handle: mine.xs[i] as string, contractAddress });
       if (mine.ys[i]) pairs.push({ handle: mine.ys[i] as string, contractAddress });
     }
-    const keypair = instance.generateKeypair();
+    const keypair = zamaInstance.generateKeypair();
     const startTimeStamp = Math.floor(Date.now() / 1000).toString();
     const durationDays = '10';
     const contractAddresses = [contractAddress];
@@ -148,14 +163,14 @@ export function GameApp() {
     // For read-only provider to viem client, we still need a wallet signer for typed data
     const provider = new ethers.BrowserProvider((window as any).ethereum);
     const signer = await provider.getSigner();
-    const eip712 = instance.createEIP712(keypair.publicKey, contractAddresses, startTimeStamp, durationDays);
+    const eip712 = zamaInstance.createEIP712(keypair.publicKey, contractAddresses, startTimeStamp, durationDays);
     const signature = await (signer as any).signTypedData(
       eip712.domain,
       { UserDecryptRequestVerification: eip712.types.UserDecryptRequestVerification },
       eip712.message,
     );
 
-    const result = await instance.userDecrypt(
+    const result = await zamaInstance.userDecrypt(
       pairs,
       keypair.privateKey,
       keypair.publicKey,
