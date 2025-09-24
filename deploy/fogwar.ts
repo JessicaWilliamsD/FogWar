@@ -8,6 +8,7 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   const deployed = await deploy("FogWar", {
     from: deployer,
     log: true,
+    skipIfAlreadyDeployed: false,
   });
 
   log(`FogWar contract deployed at: ${deployed.address}`);
@@ -16,4 +17,3 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
 export default func;
 func.id = "deploy_fogwar";
 func.tags = ["FogWar"];
-
