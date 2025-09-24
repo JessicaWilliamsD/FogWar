@@ -56,8 +56,8 @@ export function GameApp() {
   }, [address, defenderAddr, attackerAddr]);
 
   const [moveIndex, setMoveIndex] = useState(0);
-  const [newX, setNewX] = useState(5);
-  const [newY, setNewY] = useState(5);
+  // Direction: 0=up,1=down,2=left,3=right
+  const [direction, setDirection] = useState(0);
 
   const [visibleOpponent, setVisibleOpponent] = useState<{ x: number; y: number }[]>([]);
   const [myPositions, setMyPositions] = useState<{ x: number; y: number }[]>([]);
@@ -97,56 +97,29 @@ export function GameApp() {
   async function move() {
     if (!address) return;
     if (moveIndex < 0 || moveIndex > 2) return;
-    if (newX < 1 || newX > 9 || newY < 1 || newY > 9) return;
+    if (!gameId) return;
+
+    // Prepare encrypted direction using Zama relayer SDK
+    if (!zamaInstance || zamaLoading) return;
+    const encInput = zamaInstance.createEncryptedInput(CONTRACT_ADDRESS, address);
+    encInput.add8(direction);
+    const { handles, inputProof } = await encInput.encrypt();
+    const dirHandle = ethers.hexlify(handles[0]);
 
     // Use ethers for write
     const provider = new ethers.BrowserProvider((window as any).ethereum);
     const signer = await provider.getSigner();
     const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI as any, signer);
-    if (!gameId) return;
-    const tx = await contract.moveMySoldier(gameId, moveIndex, newX, newY);
+    const tx = await contract.moveMySoldier(gameId, moveIndex, dirHandle, inputProof);
     await tx.wait();
   }
 
   async function decryptAll() {
     if (!address) return;
     if (!zamaInstance || zamaLoading) return;
-
-    // Fetch opponent publicity from contract before decrypting
     if (!gameId) return;
-    const forDefender = role === 'attacker'; // if I'm attacker, opponent is defender
-    const [xPub, yPub] = await client.readContract({
-      address: CONTRACT_ADDRESS,
-      abi: CONTRACT_ABI,
-      functionName: forDefender ? 'getDefenderPublicity' : 'getAttackerPublicity',
-      args: [gameId],
-    }) as [boolean[], boolean[]];
 
-    // opponent public decrypt
-    const opp = role === 'defender' ? attackers : defenders; // opponent's handles
-    const handles: string[] = [];
-    for (let i = 0; i < 3; i++) {
-      // Only decrypt fully public soldiers (both x and y marked public)
-      const isPublic = xPub?.[i] && yPub?.[i];
-      if (isPublic) {
-        if (opp.xs[i]) handles.push(opp.xs[i] as string);
-        if (opp.ys[i]) handles.push(opp.ys[i] as string);
-      }
-    }
-    const pub = await zamaInstance.publicDecrypt(handles);
-    const oppPos: { x: number; y: number }[] = [];
-    for (let i = 0; i < 3; i++) {
-      const hx = opp.xs[i] as string;
-      const hy = opp.ys[i] as string;
-      const x = pub[hx];
-      const y = pub[hy];
-      if (typeof x === 'bigint' && typeof y === 'bigint') {
-        oppPos.push({ x: Number(x), y: Number(y) });
-      }
-    }
-    setVisibleOpponent(oppPos);
-
-    // my user decrypt (re-encrypt to user keypair)
+    // Only decrypt my soldiers, not opponent's
     const mine = role === 'defender' ? defenders : attackers;
     const pairs = [] as { handle: string; contractAddress: string }[];
     const contractAddress = CONTRACT_ADDRESS;
@@ -154,13 +127,13 @@ export function GameApp() {
       if (mine.xs[i]) pairs.push({ handle: mine.xs[i] as string, contractAddress });
       if (mine.ys[i]) pairs.push({ handle: mine.ys[i] as string, contractAddress });
     }
+
+    // Generate user keypair and EIP712 to request decryption
     const keypair = zamaInstance.generateKeypair();
     const startTimeStamp = Math.floor(Date.now() / 1000).toString();
     const durationDays = '10';
     const contractAddresses = [contractAddress];
 
-    // Prepare EIP712 and sign with wallet
-    // For read-only provider to viem client, we still need a wallet signer for typed data
     const provider = new ethers.BrowserProvider((window as any).ethereum);
     const signer = await provider.getSigner();
     const eip712 = zamaInstance.createEIP712(keypair.publicKey, contractAddresses, startTimeStamp, durationDays);
@@ -180,6 +153,11 @@ export function GameApp() {
       startTimeStamp,
       durationDays,
     );
+
+    // Clear any previously visible opponent positions
+    setVisibleOpponent([]);
+
+    // Extract my positions
     const minePos: { x: number; y: number }[] = [];
     for (let i = 0; i < 3; i++) {
       const hx = mine.xs[i] as string;
@@ -238,9 +216,15 @@ export function GameApp() {
             <h3 style={{ marginTop: 0 }}>Move Soldier</h3>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               <label>Index (0-2): <input type="number" value={moveIndex} min={0} max={2} onChange={(e) => setMoveIndex(Number(e.target.value))} style={{ width: 60 }} /></label>
-              <label>X (1-9): <input type="number" value={newX} min={1} max={9} onChange={(e) => setNewX(Number(e.target.value))} style={{ width: 60 }} /></label>
-              <label>Y (1-9): <input type="number" value={newY} min={1} max={9} onChange={(e) => setNewY(Number(e.target.value))} style={{ width: 60 }} /></label>
-              <button onClick={move} disabled={!address || !started} style={{ padding: '6px 10px' }}>Move</button>
+              <label>Direction:
+                <select value={direction} onChange={(e) => setDirection(Number(e.target.value))}>
+                  <option value={0}>Up</option>
+                  <option value={1}>Down</option>
+                  <option value={2}>Left</option>
+                  <option value={3}>Right</option>
+                </select>
+              </label>
+              <button onClick={move} disabled={!address || !started || zamaLoading} style={{ padding: '6px 10px' }}>Move</button>
             </div>
           </section>
 

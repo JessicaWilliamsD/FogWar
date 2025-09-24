@@ -1,5 +1,5 @@
 {
-  "address": "0x96f235002948E6A8841ee43544e4CFFbF7A38C9a",
+  "address": "0x9133fC78E3E5f78B83f4FFBA25fc3d9372B87141",
   "abi": [
     {
       "anonymous": false,
@@ -70,18 +70,6 @@
           "indexed": true,
           "internalType": "uint8",
           "name": "index",
-          "type": "uint8"
-        },
-        {
-          "indexed": false,
-          "internalType": "uint8",
-          "name": "x",
-          "type": "uint8"
-        },
-        {
-          "indexed": false,
-          "internalType": "uint8",
-          "name": "y",
           "type": "uint8"
         }
       ],
@@ -359,14 +347,14 @@
           "type": "uint8"
         },
         {
-          "internalType": "uint8",
-          "name": "newX",
-          "type": "uint8"
+          "internalType": "externalEuint8",
+          "name": "direction",
+          "type": "bytes32"
         },
         {
-          "internalType": "uint8",
-          "name": "newY",
-          "type": "uint8"
+          "internalType": "bytes",
+          "name": "inputProof",
+          "type": "bytes"
         }
       ],
       "name": "moveMySoldier",
