@@ -73,10 +73,11 @@ export function GameApp() {
 
   useEffect(() => { refreshGames().catch(() => void 0); }, []);
 
-  async function createGame(asDefender: boolean) {
+  async function createGame() {
     const provider = new ethers.BrowserProvider((window as any).ethereum);
     const signer = await provider.getSigner();
     const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI as any, signer);
+    const asDefender = Math.random() < 0.5; // 随机角色
     const tx = await contract.createGame(asDefender);
     await tx.wait();
     await refreshGames();
@@ -84,9 +85,11 @@ export function GameApp() {
     setGameId(next);
   }
 
-  async function joinAs(r: 'defender' | 'attacker') {
+  async function joinAuto() {
     if (!gameId) return;
-    const method = r === 'defender' ? 'joinAsDefender' : 'joinAsAttacker';
+    // 自动加入缺少的角色
+    const needDef = !defenderAddr;
+    const method = needDef ? 'joinAsDefender' : 'joinAsAttacker';
     const provider = new ethers.BrowserProvider((window as any).ethereum);
     const signer = await provider.getSigner();
     const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI as any, signer);
@@ -183,39 +186,49 @@ export function GameApp() {
 
       <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
         <div>
-          <Board defenderSoldiers={defenderSoldiers} attackerSoldiers={attackerSoldiers} opponentVisiblePositions={visibleOpponent} />
+          <Board
+            defenderSoldiers={defenderSoldiers}
+            attackerSoldiers={attackerSoldiers}
+            opponentVisiblePositions={visibleOpponent}
+            myRole={role}
+            mySoldiers={role === 'defender' ? defenderSoldiers : role === 'attacker' ? attackerSoldiers : []}
+            selectedIndex={moveIndex}
+            onSelectIndex={(i) => setMoveIndex(i)}
+          />
         </div>
         <div style={{ flex: 1 }}>
           <section style={{ background: '#fff', border: '1px solid #ddd', borderRadius: 8, padding: 16, marginBottom: 16 }}>
-            <h3 style={{ marginTop: 0 }}>Status</h3>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <label>Game: </label>
-              <select value={gameId ? Number(gameId) : ''} onChange={(e) => setGameId(BigInt(e.target.value))}>
-                <option value="" disabled>Select a game</option>
-                {games.map((id) => (<option key={id.toString()} value={id.toString()}>{id.toString()}</option>))}
-              </select>
-              <button onClick={refreshGames}>Refresh</button>
+            <h3 style={{ marginTop: 0 }}>All Games</h3>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+              {games.length === 0 && <span>—</span>}
+              {games.map((id) => (
+                <button key={id.toString()} onClick={() => setGameId(id)} style={{ padding: '6px 10px', border: gameId === id ? '2px solid #333' : undefined }}>
+                  #{id.toString()}
+                </button>
+              ))}
+              <button onClick={refreshGames} style={{ padding: '6px 10px' }}>Refresh</button>
             </div>
-            <p>Started: {started ? 'Yes' : 'No'}</p>
-            <p>Defender: {defenderAddr ? formatAddress(defenderAddr as string) : '—'}</p>
-            <p>Attacker: {attackerAddr ? formatAddress(attackerAddr as string) : '—'}</p>
-            <p>Your role: {role}</p>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <button onClick={() => createGame(true)} style={{ padding: '6px 10px' }}>Create Game (Defender)</button>
-              <button onClick={() => createGame(false)} style={{ padding: '6px 10px' }}>Create Game (Attacker)</button>
+              <button onClick={createGame} style={{ padding: '6px 10px' }}>Create New Game</button>
               {!started && (
-                <>
-                  <button onClick={() => joinAs('defender')} style={{ padding: '6px 10px' }} disabled={!gameId}>Join as Defender</button>
-                  <button onClick={() => joinAs('attacker')} style={{ padding: '6px 10px' }} disabled={!gameId}>Join as Attacker</button>
-                </>
+                <button onClick={joinAuto} style={{ padding: '6px 10px' }} disabled={!gameId}>Join</button>
               )}
             </div>
           </section>
 
+          {gameId && (
+            <section style={{ background: '#fff', border: '1px solid #ddd', borderRadius: 8, padding: 16, marginBottom: 16 }}>
+              <h3 style={{ marginTop: 0 }}>Game Status</h3>
+              <p>Game: #{Number(gameId)}</p>
+              <p>Started: {started ? 'Yes' : 'No'}</p>
+              <p>Your role: {role}</p>
+            </section>
+          )}
+
           <section style={{ background: '#fff', border: '1px solid #ddd', borderRadius: 8, padding: 16, marginBottom: 16 }}>
             <h3 style={{ marginTop: 0 }}>Move Soldier</h3>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              <label>Index (0-2): <input type="number" value={moveIndex} min={0} max={2} onChange={(e) => setMoveIndex(Number(e.target.value))} style={{ width: 60 }} /></label>
+              <label>Index (0-2): <input type="number" value={moveIndex} min={0} max={2} readOnly style={{ width: 60, background: '#f7f7f7' }} /></label>
               <label>Direction:
                 <select value={direction} onChange={(e) => setDirection(Number(e.target.value))}>
                   <option value={0}>Up</option>
@@ -230,7 +243,7 @@ export function GameApp() {
 
           <section style={{ background: '#fff', border: '1px solid #ddd', borderRadius: 8, padding: 16 }}>
             <h3 style={{ marginTop: 0 }}>Decrypt</h3>
-            <p>Decrypts opponent public positions and your own via user-decrypt.</p>
+            <p>Decrypt your soldiers via user-decrypt.</p>
             <button onClick={decryptAll} disabled={!address} style={{ padding: '6px 10px' }}>Decrypt</button>
           </section>
         </div>
